@@ -11,10 +11,12 @@ import java.io.FileWriter;
 import java.net.URISyntaxException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class Driver implements OrderExecutor {
     private int id;
-    private boolean isFree = true;
+    private AtomicBoolean isFree = new AtomicBoolean(true);
     private Path pathToFolder; //target/classes/driversFolder/{driverId}
 
     public Driver(int id) {
@@ -30,13 +32,13 @@ public class Driver implements OrderExecutor {
         }
     }
 
-    public synchronized void executeOrder(Order order) {
-        isFree = false;
+    public void executeOrder(Order order) {
+        isFree.set(false);
         try {
             doWork(order);
             System.out.println("Driver with id " + id + " execute order " + order.getDispatchedId() + " and sleep");
             Thread.sleep(3000); //какая-то работа
-            isFree = true;
+            isFree.set(true);
 
         } catch (InterruptedException e) {
             e.printStackTrace();
@@ -65,6 +67,6 @@ public class Driver implements OrderExecutor {
     }
 
     public boolean isFree() {
-        return isFree;
+        return isFree.get();
     }
 }

@@ -16,7 +16,9 @@ public class DispatchingService {
     private AtomicInteger messageCounter = new AtomicInteger(0);
     private ExecutorService executorService;
     private ExecutorService cachedThreadPool;
-    private Thread driverTaskProcessor;
+    private ExecutorService driverTaskProcessorExecutor;
+
+    private Runnable driverTaskProcessor;
 
     private ConcurrentLinkedQueue<Dispatcher> dispatchers = new ConcurrentLinkedQueue<>();
     private ConcurrentHashMap<Integer, OrderExecutor> freeExecutors = new ConcurrentHashMap();
@@ -33,10 +35,11 @@ public class DispatchingService {
             return order.getDispatchedId();
         });
 
-        startDriverTaskProcessorIfNecessary();
-
         try {
-            return result.get();
+            int id = result.get();
+
+            startDriverTaskProcessor();
+            return id;
         } catch (InterruptedException | ExecutionException e) {
             e.printStackTrace();
         }
@@ -55,39 +58,39 @@ public class DispatchingService {
             freeExecutors.put(i, new Driver(i));
         }
 
-        driverTaskProcessor = new Thread(getDriverTaskProcessor());
-        driverTaskProcessor.start();
+        driverTaskProcessorExecutor = Executors.newSingleThreadExecutor();
     }
 
     private Runnable getDriverTaskProcessor() {
-        return () -> {
-            while (!orders.isEmpty()) {
-                try {
-                    cachedThreadPool.submit(() -> {
-
+        if (driverTaskProcessor == null)
+            driverTaskProcessor = () -> {
+                while (!orders.isEmpty()) {
+                    try {
                         Order order = orders.remove();
                         OrderExecutor executor = freeExecutors.remove(order.getTargetId());
                         if (executor != null) {
                             usedExecutors.put(executor.getId(), executor);
-                            executor.executeOrder(order);
+                            //если нашли подходящего водителя, то отправляем его работать в отдельном потоке
+                            cachedThreadPool.submit(() -> {
+                                executor.executeOrder(order);
+                            });
                         } else {
                             orders.add(order);
                             freeExecutors.putAll(usedExecutors.entrySet().stream()
                                     .filter(x -> x.getValue().isFree())
                                     .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue)));
                         }
-                    });
-                } catch (Exception e) {
-                    e.printStackTrace();
+
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
                 }
-            }
-        };
+            };
+
+        return driverTaskProcessor;
     }
 
-    private void startDriverTaskProcessorIfNecessary() {
-        if (!driverTaskProcessor.isAlive() && !orders.isEmpty()) {
-            driverTaskProcessor = new Thread(getDriverTaskProcessor());
-            driverTaskProcessor.start();
-        }
+    private void startDriverTaskProcessor() {
+        driverTaskProcessorExecutor.submit(getDriverTaskProcessor());
     }
 }

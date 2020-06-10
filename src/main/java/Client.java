@@ -4,18 +4,29 @@ import org.w3c.dom.Element;
 
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
-import javax.xml.parsers.ParserConfigurationException;
 import java.util.Random;
 
 public class Client {
 
-    public static void main(String[] args) {
+    public static void main(String[] args) throws InterruptedException {
         int countOfDispatches = 100;
         int countOfDrivers = 10;
 
         DispatchingService dispatchingService = new DispatchingService(countOfDispatches, countOfDrivers);
 
-        for (int i = 0; i < 100; i++) {
+        for (int i = 0; i < 10; i++) {
+            new Thread(() -> {
+                for (int j = 0; j < 10; j++) {
+                    int id = dispatchingService.acceptOrder(getDoc(0, countOfDrivers - 1));
+                    if (id == -1) throw new RuntimeException("-1 value");
+                }
+            }).start();
+        }
+
+
+        Thread.sleep(10000);
+
+        for (int i = 0; i < 10; i++) {
             new Thread(() -> {
                 for (int j = 0; j < 10; j++) {
                     int id = dispatchingService.acceptOrder(getDoc(0, countOfDrivers - 1));
@@ -50,8 +61,6 @@ public class Client {
             document.appendChild(message);
 
             return document;
-        } catch (ParserConfigurationException e) {
-            e.printStackTrace();
         } catch (Exception e) {
             e.printStackTrace();
         }
